@@ -1,145 +1,65 @@
-# Lightweight Fog Testbed (LFT) – iPerf Experiment Branch
+<p align="center"><img src="logos/lft-github.png" width="450" alt="LFT Logo"></p>
+
+# Lightweight Fog Testbed (LFT)
+
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Python: 3.9+](https://img.shields.io/badge/python-3.9+-brightgreen.svg)](https://www.python.org/)
+[![Wiki](https://img.shields.io/badge/docs-GitHub%20Wiki-orange.svg)](https://github.com/UnB-COMNET/lft/wiki)
 
 ## Description
-
-This branch extends the **Lightweight Fog Testbed (LFT)** into a research environment for **Intent-Based Networking (IBN)**. It features a **Deployer** that receives, processes and applies **Nile intents** within a virtualized topology built with **ONOS** and **Open vSwitch (OVS)**.
-
-The platform supports a  **iperf3-based experimental track** to compare five distinct routing paradigms under network stress (**degradation** or **link failure**):
-
-- **CDN-QoE**: Algorithm for optimal path and server selection, considering real-time RTT and throughput.
-- **LLM**: Routing using **Llama 3.1** (via **Ollama**) for decision-making.
-- **Threshold**: (not defined yet).
-- **Reactive Forwarding (fwd)**: Standard SDN shortest-path routing based on hop count.
-- **OSPF (Legacy)**: Traditional link-state protocol running on **ONOS v1.5**.
-
----
+LFT is a high-performance Python framework designed to orchestrate lightweight, containerized network emulation topologies with ease. Using Docker containers and Linux network namespaces, it allows researchers and engineers to construct arbitrary network topologies, emulate switches (Open vSwitch), SDN controllers (Ryu), cellular links (srsRAN 4G/LTE), and security attack scenarios with CICFlowMeter and perfSONAR integration.
 
 ## 1. Requirements
+- **Operating System**: Ubuntu Desktop / Server 24.04 LTS (recommended) or macOS via OrbStack/Docker.
+- **Kernel**: Linux 5.15+ with network namespaces, `veth`, and Open vSwitch support.
+- **Python**: Python 3.9+ with `pip`.
+- **Docker**: Docker Engine 24.0+.
 
-You need:
-
-- (Recommended) Ubuntu Desktop 24.04 LTS
-- Docker (with permission to run `sudo docker …`)
-- Python 3 and `pip3`
-- Git
-- `tmux` for persistent runs over SSH
-
----
-
-## 2. Installation & Image Build
-
-To install the project you need to run:
-
-```
+## 2. Installation
+Install the project via `pip3`:
+```bash
 pip3 install profissa_lft
 ```
 
-Or clone the repository and install locally:
-
-```
-git clone https://github.com/alexandrekaihara/lft
+Or install from source:
+```bash
+git clone https://github.com/UnB-COMNET/lft.git
 cd lft
 chmod +x dependencies.sh
-sudo ./dependencies.sh
+./dependencies.sh
 pip3 install -e .
 ```
 
-## 2.1 Build Docker Images
-
-```
-# ONOS 2.5 (Compatible with link-latency app)
-sudo docker pull onosproject/onos:2.5.0
-
-# ONOS 1.5 (Compatible with OSPF)
-sudo docker pull onosproject/onos:1.5
-
-# OpenSwitch
-cd docker/openswitch && sudo docker build -t alexandremitsurukaihara/lst2.0:openvswitch .
-
-# Quagga Router
-cd docker/quagga && sudo docker build -t quagga .
-
-# Iperf client/server
-cd docker/iperf && sudo docker build -t lft-iperf .
-
-```
-## 3. CLI
-
-After installing, use `sudo lft` to manage topologies interactively.
-
-**Load a topology from config and open the REPL:**
-```
-sudo lft topology create --path onos_topologies/iperf_experiment/diamond_topology/constants.py
+## 3. Quick Start
+Run a simple Software-Defined Network topology:
+```bash
+cd examples
+python3 simpleSDNTopology.py
 ```
 
-**Start an empty topology manually:**
-```
-sudo lft topology create --manual
-```
+## 4. Troubleshooting
+If you encounter any issues:
+1. Verify system dependencies: `./dependencies.sh`.
+2. Check if lingering containers are active: `docker ps -a` (run `docker rm -f $(docker ps -aq)` to clean up).
+3. Ensure required Docker images are available locally: `docker images`.
+4. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
 
-**REPL commands:**
-```
-create host <name> <ip>       add a host
-create switch <name>          add a switch
-connect <name1> <name2>       link two nodes
-traffic <ping|iperf> <n1> <n2>
-ls [hosts|switches]
-quit
-```
+## 5. Documentation
+Complete, in-depth documentation is available across multiple formats:
 
-**Other commands:**
-```
-sudo lft experiment                        list available experiments
-sudo lft experiment <name>                 run an experiment
-sudo lft utils clean                       remove all Docker containers
-```
+- **Interactive GitHub Wiki**: **[UnB-COMNET/lft Wiki](https://github.com/UnB-COMNET/lft/wiki)** (with sidebar navigation, diagrams, and quick references).
+- **Markdown Documentation**: Offline-browsable Markdown files in the [`docs/`](docs/) directory.
+- **Native DokuWiki Syntax**: Pre-formatted `.txt` files in [`dokuwiki/`](dokuwiki/) ready to import into local lab or university DokuWiki servers.
 
----
-
-## 3. First Run (legacy)
-
-On the source root of the project run:
-
-```
-cd onos_topologies/iperf_experiment
-python3 main.py
-```
-
-### 3. 1 Customize topology
-
-If you want to customize the topology, it's possible to do so by changing the data structures within iperf_experiment/constants.py.
-
-## 4. Results
-
-The experiment runs in a loop of **6 snapshots** (default: **10 minutes each**).
-
-### Snapshot Schedule
-
-- **Snapshots 1, 3, 4, and 6**: baseline / normal network state
-- **Snapshots 2 and 5**: the selected **hindering** is applied to a link
-
-
-### Output Directory
-
-Results are stored in:
-
-```text
-results/iperf/run_YYYY-MM-DD_HH-MM-SS/
-```
-### Generated Files
-
-At the end of the run, the script automatically generates unified CSV files:
-
-- `iperf_flow_all.csv`: throughput, jitter, and packet loss data
-- `ping_flow_all.csv`: high-resolution RTT logs with timestamps
-
-- `ovs_ports_all.csv`: per-port traffic, drops and errors
-- `ovs_flows_all.csv`: flow rules, actions and counters
-
-## 5. Troubleshooting
-If you face any issue while running any LFT scrips:
-1. Check if all dependencies are installed
-2. Check if you are using the correct version of Ubuntu Desktop
-3. Check if the containers are already instantiated on docker ```docker ps -a```. If so, then remove them by using ```docker system prune``` or forcefully stop them ```docker rm -f containerName```
-4. Verify if the docker image that you are trying to instantiate with LFT exists on your local machine ```docker images``` or exists on [Docker Hub|https://hub.docker.com/].
-5. Check if the image was built correctly. See docker folder for more information.
+### Documentation Index
+- **[Installation & Requirements](docs/Installation.md)**
+- **[LFT Core Architecture](docs/Architecture.md)**
+- **[Full API Reference](docs/API-Reference.md)**
+- **[SDN Topologies](docs/SDN-Topologies.md)**
+- **[Code Examples Walkthrough](docs/Code-Examples.md)** (covers all 8 scripts in `examples/`)
+- **[Experiments & Benchmarks](docs/Experiments-and-Benchmarks.md)** (deployment time, scalability, perfSONAR, wired and wireless benchmarks in `experiment/`)
+- **[Security Scenario: UNBCA / CIDDS](docs/Security-Scenario-UNBCA.md)** (enterprise topology, benign behaviors, attacks, and flow datasets in `scenario/`)
+- **[4G/LTE Cellular Emulation](docs/Wireless-4G-Emulation.md)** (srsRAN EPC, eNodeB, UEs, and ZMQ virtual radio)
+- **[Docker Image Catalog](docs/Docker-Images.md)** (specifications for all 11 Docker images)
+- **[Troubleshooting & Teardown](docs/Troubleshooting.md)**
+- **[Complete Master Manual (All-in-One)](docs/Master-Manual.md)** &bull; [`dokuwiki/LFT_MASTER_MANUAL.txt`](dokuwiki/LFT_MASTER_MANUAL.txt)
