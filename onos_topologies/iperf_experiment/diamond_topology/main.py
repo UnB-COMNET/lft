@@ -2,7 +2,7 @@ import os, sys, time, json, subprocess, requests
 from constants import CONFIG
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[2]
+project_root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(project_root))
 
 from onos_topologies.dash_topology.dash_topology import DashTopology
