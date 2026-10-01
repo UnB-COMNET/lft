@@ -1,0 +1,38 @@
+# uv project file for local development of LFT.
+#
+# This mirrors setup.py's metadata/dependencies but is deliberately NOT a
+# buildable package (package = false): setup.py's CustomInstall hook runs
+# `sudo ./dependencies.sh` (apt-get upgrade + docker.io/firewalld/...) on any
+# wheel build, which `uv sync` would otherwise trigger. With package = false uv
+# only creates the venv and installs the dependencies below; run the tool from
+# the repo root instead of via the `lft` entry point:
+#
+#   uv sync
+#   sudo .venv/bin/python cli.py topology create --manual
+#
+# setup.py stays the source of truth for the published PyPI package.
+[project]
+name = "profissa_lft"
+version = "1.0.10"
+description = "Lightweight Fog Testbed (LFT): lightweight network topologies built from Docker containers."
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.9"
+dependencies = [
+    "click",      # cli.py (missing from setup.py install_requires)
+    "pandas",
+    "paramiko",
+    "requests",
+    "rich",
+]
+
+[dependency-groups]
+# Only needed by experiment/measure_deploy_time.py, results/*.py and
+# onos_topologies/iperf_experiment/create_n_run.py. Install with `uv sync --group analysis`.
+analysis = [
+    "matplotlib",
+    "numpy",
+]
+
+[tool.uv]
+package = false

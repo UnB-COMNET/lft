@@ -34,3 +34,6 @@ build
 dist
 profissa_lft.egg-info
 .DS_Store
+
+# uv
+.venv/
