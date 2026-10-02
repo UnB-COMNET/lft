@@ -89,22 +89,22 @@ LFT uses specialized Docker images for its nodes, switches, controllers, and ser
 
 ```bash
 # Core infrastructure
-docker pull alexandremitsurukaihara/lft:host
-docker pull alexandremitsurukaihara/lft:openvswitch
-docker pull alexandremitsurukaihara/lft:ryucontroller
+docker pull alexandremitsurukaihara/lst2.0:host
+docker pull alexandremitsurukaihara/lst2.0:openvswitch
+docker pull alexandremitsurukaihara/lst2.0:ryucontroller
 
 # Security and monitoring tools
-docker pull alexandremitsurukaihara/lft:cicflowmeter
+docker pull alexandremitsurukaihara/lst2.0:cicflowmeter
 docker pull alexandremitsurukaihara/lft:perfsonar-testpoint-ubuntu
 
 # Enterprise servers for attack/security scenarios
-docker pull alexandremitsurukaihara/lft:backup
-docker pull alexandremitsurukaihara/lft:file
-docker pull alexandremitsurukaihara/lft:web
-docker pull alexandremitsurukaihara/lft:mail
-docker pull alexandremitsurukaihara/lft:printer
-docker pull alexandremitsurukaihara/lft:seafile
-docker pull alexandremitsurukaihara/lft:linuxclient
+docker pull alexandremitsurukaihara/lst2.0:backup
+docker pull alexandremitsurukaihara/lst2.0:file
+docker pull alexandremitsurukaihara/lst2.0:web
+docker pull alexandremitsurukaihara/lst2.0:mail
+docker pull alexandremitsurukaihara/lst2.0:printer
+docker pull alexandremitsurukaihara/lst2.0:seafile
+docker pull alexandremitsurukaihara/lst2.0:linuxclient
 ```
 
 ----
