@@ -7,8 +7,8 @@ import subprocess
 NETEM_BANDS = (("1:1", "10:"), ("1:2", "20:"), ("1:3", "30:"))
 
 
-def create_prio_netem(sw, interfaces, tcp_ports):
-    """Create bands for {interface: (rate, delay, jitter)} in one Docker call"""
+def create_prio_netem(sw, interfaces, tcp_ports, loss=0):
+    """Create bands for {interface: (rate, delay, jitter)} in one Docker call; loss (%) on ICMP and data"""
     commands = []
     for iface, (rate, delay, jitter) in interfaces.items():
         device = shlex.quote(iface)
@@ -19,10 +19,15 @@ def create_prio_netem(sw, interfaces, tcp_ports):
             f"tc qdisc add dev {device} root handle 1: prio bands 3 "
             "priomap 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1",
         ])
-        commands.extend(_netem_commands("add", iface, delay, jitter, rate))
+        commands.extend(_netem_commands("add", iface, delay, jitter, rate, loss))
         commands.extend([
             f"tc filter add dev {device} parent 1: protocol all prio 1 u32 "
             "match u16 0x3366 0xffff at -2 flowid 1:1",
+            # LLDP is not IP, so the priomap drops it into the rate-capped band with
+            # the iperf traffic. On a saturated link ONOS then stops seeing the link
+            # and removes it from the topology, which reads downstream as "no link".
+            f"tc filter add dev {device} parent 1: protocol all prio 1 u32 "
+            "match u16 0x88cc 0xffff at -2 flowid 1:1",
             f"tc filter add dev {device} parent 1: protocol ip prio 2 u32 "
             "match ip protocol 1 0xff flowid 1:2",
         ])
@@ -82,9 +87,9 @@ def set_link(link, qdisc_params, action=None):
     return results
 
 
-def update_prio_netem(sw, iface, delay, jitter, rate):
+def update_prio_netem(sw, iface, delay, jitter, rate, loss=0):
     """Update existing bands without replacing filters"""
-    commands = _netem_commands("change", iface, delay, jitter, rate)
+    commands = _netem_commands("change", iface, delay, jitter, rate, loss)
     subprocess.run(
         ["docker", "exec", sw, "sh", "-ec", "\n".join(commands)],
         check=True,
@@ -133,13 +138,16 @@ def verify_netem(sw, iface, expected_delay, expected_rate):
 # tc qdisc add dev s0s1 parent 1:1 handle 10: netem delay 20ms 2ms
 # tc qdisc add dev s0s1 parent 1:2 handle 20: netem delay 20ms 2ms
 # tc qdisc add dev s0s1 parent 1:3 handle 30: netem delay 20ms 2ms rate 10mbit
-def _netem_commands(operation, iface, delay, jitter, rate):
+# loss (%) goes on the ICMP and data bands only: the probe band keeps the controller seeing the link
+def _netem_commands(operation, iface, delay, jitter, rate, loss=0):
     commands = []
     for parent, handle in NETEM_BANDS:
         command = (
             f"tc qdisc {operation} dev {shlex.quote(iface)} parent {parent} "
             f"handle {handle} netem delay {shlex.quote(delay)} {shlex.quote(jitter)}"
         )
+        if loss and handle != NETEM_BANDS[0][1]:
+            command += f" loss {float(loss):g}%"
         if handle == NETEM_BANDS[-1][1]:
             command += f" rate {shlex.quote(rate)}"
         commands.append(command)

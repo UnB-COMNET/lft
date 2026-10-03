@@ -61,6 +61,23 @@ in `sistemas/REIN` if you're working inside the PIBIC project, or your own
 build of those services otherwise. `dependencies.sh` does not build these;
 they come from a different repository.
 
+More images, built from `docker/`, give the topologies real video. Every server also runs `iperf3 -s`
+and serves its manifest at `http://<ip>/manifest.mpd`, so `lft traffic start --tool dash` plays any of
+them; a client picks the quality by the throughput it measures.
+
+```bash
+sudo docker build -t lft-dash-video docker/dash_video_server       # test video, 7 qualities, 60 s in a loop
+sudo docker build -t lft-dash-live docker/dash_live_server         # live: ffmpeg encodes 5 qualities in real time
+sudo docker build -t lft-pydash-server docker/pydash_server        # Big Buck Bunny, 6 qualities (DASH Dataset 2014)
+sudo docker build -t lft-dash-client docker/dash_video_client      # dash-play, dash-client, iperf3, ping
+sudo docker build -t lft-pydash-client docker/pydash_client        # pydash (pydash-play), iperf3, ping
+```
+
+`lft-pydash-server` fetches its ~720 MB of segments from the dataset at build time. `lft-pydash-client`
+runs [pydash](https://github.com/mfcaetano/pydash) unchanged, with an `R2AThroughput` algorithm added to
+its `r2a/`; it plays `lft-pydash-server` only, since pydash takes the segment length from the
+manifest's `1sec/` folder.
+
 To use LFT only as a Python library, without the CLI and the ONOS experiments, it is also on PyPI:
 
 ```bash
@@ -103,10 +120,35 @@ quit / help
 
 **Other commands:**
 ```bash
-sudo lft experiment                        # list available experiments
+sudo lft experiment [--json]               # list available experiments
 sudo lft experiment <name>                 # run an experiment
-sudo lft utils clean                       # remove all Docker containers
+sudo lft utils clean                       # remove the topology's containers (label lft=1), nothing else
 ```
+
+**Managing a running topology.** `onos_topologies/runtime/` reads what is running (docker, ovs-vsctl,
+ip, tc) and changes it with what the topologies are built with; the state is saved in
+`/var/lib/lft/topology.json`. Every command takes `--help` and `--json` (the result as JSON on
+stdout, the progress as JSON lines on stderr), so other programs can drive LFT:
+```bash
+sudo lft topology create --preset diamond-video --detach   # build and exit (no REPL)
+sudo lft topology export --path topo.py      # what is running as a topology file (builds again with --path)
+sudo lft topology show | sync | status       # saved state, read it again from the system, containers
+sudo lft link set s0 s1 --rate 10mbit --delay 20ms --loss 0.5
+sudo lft link down | up | reset s0 s1        # and: sudo lft link stats (counters and rates)
+sudo lft host add cl3 --switch s2 --ip 192.168.0.9 --image lft-dash-client [--server]
+sudo lft host set | rm | pause | unpause cl3
+sudo lft switch add s4 --desc BA --link s0:rate=50mbit,delay=8ms
+sudo lft switch stop | start | rm s4 [--with-hosts]   # stop: no controller, links down, paused
+sudo lft iface ls [--node s0]                # veth ends: peer, address, qdisc, shaping, counters
+sudo lft capture start --iface s0s1 --duration 30     # and: capture ls | stop c1
+sudo lft traffic start --tool iperf3|dash|ping --client cl0 --server ds0 [--duration 60]
+sudo lft traffic ls | stop | logs t1 [--follow]
+sudo lft timeline run plan.py                # link states, traffic, captures and HTTP calls on a schedule
+sudo lft results ls [--run timeline/<run>]
+```
+The timeline file format is described at the top of `onos_topologies/runtime/timeline.py`.
+
+---
 
 ## 5. ONOS experiments and results
 

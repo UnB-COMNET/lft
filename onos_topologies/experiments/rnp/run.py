@@ -2,7 +2,6 @@ import sys
 import json
 import os
 import random
-import shlex
 import subprocess
 import threading
 import time
@@ -21,7 +20,8 @@ from onos_topologies.experiments.runtime import (
     sleep_countdown,
 )
 from onos_topologies.infrastructure import onos_client
-from onos_topologies.infrastructure.containers import cleanup
+from onos_topologies.infrastructure.containers import wait_http
+from onos_topologies.infrastructure.containers import cleanup, compose_cmd, compose_down, compose_up
 from onos_topologies.infrastructure.traffic_control import (
     create_prio_netem,
     rate_to_kbit,
@@ -74,13 +74,6 @@ from .session import IperfSession, start_notifications
 project_root = Path(__file__).resolve().parents[3]
 
 
-DOCKER_RUN = "sudo docker run --rm -d --network host -v /var/run/docker.sock:/var/run/docker.sock"
-
-def start_container(name: str, image: str = None, env: dict = None):
-    flags = "".join(f" -e {k}={shlex.quote(v)}" for k, v in (env or {}).items())
-    subprocess.run(f"{DOCKER_RUN}{flags} --name {name} {image or name}", shell=True)
-
-
 # Fire-and-forget telemetry: never let an unreachable supervisor abort a run.
 def post_quietly(url, **kwargs):
     try:
@@ -89,7 +82,7 @@ def post_quietly(url, **kwargs):
         pass
 
 
-def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_name: str = None):
+def main(algorithm: str = None, seed: int = None, auto_start: bool = None, run_name: str = None):
     if algorithm is None:
         algorithm = ''
         while algorithm not in MODES:
@@ -98,8 +91,9 @@ def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_
     mode_cfg = MODES[algorithm]
     service  = mode_cfg.get("service", mode_cfg["name"])
 
-    auto_start_containers = auto_start
-    if not auto_start and mode_cfg.get("use_deployer", False):
+    # None asks; True starts deployer and supervisor; False: they are already running
+    auto_start_containers = bool(auto_start)
+    if auto_start is None and mode_cfg.get("use_deployer", False):
         launch_choice = ''
         while launch_choice not in {'1', '2'}:
             launch_choice = input(
@@ -183,7 +177,7 @@ def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_
     session = IperfSession(ping_dir, client_to_server, server_by_ip, mark)
 
     def _send_intent_async(clean_ip, deployer_service):
-        payload = {"intent": f"define intent q1: from endpoint('{clean_ip}') add service('{deployer_service}')"}
+        payload = {"intent": f"define intent q1: for endpoint('{clean_ip}') add service('{deployer_service}')"}
         print(f" [SETUP] Sending intent for {clean_ip} (async, timeout={INTENT_TIMEOUT_S}s)...")
         try:
             response = requests.post(base_url_deployer, json=payload, timeout=INTENT_TIMEOUT_S)
@@ -258,22 +252,20 @@ def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_
         print("\n[DONE] Topology is up and running.")
 
         if mode_cfg.get("use_deployer", False):
+            wait_http("http://127.0.0.1:8181/onos/v1/cluster", auth=("onos", "rocks"))
             sup_mode = mode_cfg["supervisor_mode"]
             supervisor_env = {"SUPERVISOR_MODE": sup_mode}
             if sup_mode == "llm":
                 supervisor_env["LLM_URL"] = os.environ.get("LLM_URL", LLM_URL)
             if auto_start_containers:
                 print(f"\n [SETUP] Starting deployer and supervisor (drift mode: {sup_mode})...")
-                start_container("deployer")
-                start_container("supervisor", env=supervisor_env)
+                compose_up(supervisor_env)
             else:
-                supervisor_flags = "".join(f" -e {k}={shlex.quote(v)}" for k, v in supervisor_env.items())
-                print("\n [SETUP] Start the deployer and supervisor manually in separate terminals:")
-                print("  deployer:   sudo docker run --rm -it --network host -v /var/run/docker.sock:/var/run/docker.sock --name deployer deployer")
-                print(f"  supervisor: sudo docker run --rm -it --network host -v /var/run/docker.sock:/var/run/docker.sock"
-                      f"{supervisor_flags} --name supervisor supervisor")
+                print("\n [SETUP] Start the deployer and supervisor manually, with their logs attached:")
+                print(f"  {compose_cmd('up', supervisor_env)}")
             append_event(run_root, f"SUPERVISOR_MODE {sup_mode}")
-            sleep_countdown(30)
+            wait_http(base_url_metrics)
+            wait_http(f"{base_url_supervisor}/metrics")
 
         for raw_ip in topo.client_ip_range:
             clean_ip = raw_ip.split('/')[0].strip()
@@ -597,6 +589,16 @@ def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_
         print("[CONTINUOUS] Stop requested.")
 
     finally:
+        if sys.exc_info()[0] is not None:
+            for container in ("c1", "deployer", "supervisor"):
+                try:
+                    with (run_root / f"{container}-failure.log").open("w", encoding="utf-8") as output:
+                        subprocess.run(
+                            ["docker", "logs", "--tail", "200", container],
+                            stdout=output, stderr=subprocess.STDOUT, timeout=15,
+                        )
+                except Exception as error:
+                    print(f"[DIAGNOSTICS] Could not save {container} logs: {error}")
         append_event(run_root, f"CONTINUOUS_STOP {int(time.time())}")
 
         # Release the port before the next main() in this process binds it.
@@ -672,8 +674,7 @@ def main(algorithm: str = None, seed: int = None, auto_start: bool = False, run_
               f"-> {run_root / 'ping_all.csv'}")
         
         if auto_start_containers:
-            for container in ("supervisor", "deployer"):
-                subprocess.run(f"sudo docker rm -f {container} 2>/dev/null || true", shell=True)
+            compose_down()
 
         try:
             cleanup()
