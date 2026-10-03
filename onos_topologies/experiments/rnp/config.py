@@ -56,7 +56,7 @@ POPS = CONFIG_RNP["pops"]
 base_url_deployer = "http://127.0.0.1:5000/deploy"
 base_url_metrics = "http://127.0.0.1:5000/metrics"
 base_url_supervisor = "http://127.0.0.1:5151"
-ROTATE_S = 60 # seconds per snapshot
+ROTATE_S = 300 # seconds per snapshot
 N_SNAPSHOTS = 12
 
 IPERF_NOTIFY_PORT = 5152
