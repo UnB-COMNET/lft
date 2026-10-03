@@ -18,7 +18,6 @@ profissa_lft/languagepacks.json
 profissa_lft/logs/
 **/__pycache__/
 profissa_lft/machineid
-onos_topologies/dash_topology/__pycache__
 demonstration/__pycache__
 experiment/__pycache__
 profissa_lft/__pycache__
@@ -35,3 +34,8 @@ build
 dist
 profissa_lft.egg-info
 .DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv
+dependencies.log

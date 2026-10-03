@@ -20,6 +20,8 @@ from .node import Node
 
 
 class Controller(Node):
+    kind = "controller"
+
     def __init__(self, nodeName: str) -> None:
         super().__init__(nodeName)
         self.__process = 0

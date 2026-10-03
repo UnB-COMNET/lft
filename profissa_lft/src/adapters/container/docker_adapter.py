@@ -31,14 +31,17 @@ class DockerAdapter(ContainerPort):
         self.KILL = "kill"
         self.PULL = "pull"
 
-    def instantiate(self, dockerImage="alexandremitsurukaihara/lst2.0:host", dockerCommand='', dns='8.8.8.8', memory='', cpus='', runCommand='') -> None:
+    def instantiate(self, dockerImage="alexandremitsurukaihara/lst2.0:host", dockerCommand='', dns='8.8.8.8', memory='', cpus='', runCommand='', labels=None) -> None:
         command = []
+        labelOptions = " ".join(f"--label {key}={value}" for key, value in (labels or {}).items())
         
         def addDockerRun():
             command.append(DOCKER_RUN)
 
         def addRunOptions():
             command.append("-d")
+            if labelOptions:
+                command.append(labelOptions)
 
         def addNetwork():
             command.append(NETWORK + "=none")
@@ -86,6 +89,8 @@ class DockerAdapter(ContainerPort):
             addRunCommand(runCommand)
 
         if dockerCommand != '':
+            if labelOptions:
+                dockerCommand = dockerCommand.replace("docker run ", f"docker run {labelOptions} ", 1)
             subprocess.run(dockerCommand, shell=True, capture_output=True)            
         else:
             subprocess.run(buildCommand(), shell=True, capture_output=True)
