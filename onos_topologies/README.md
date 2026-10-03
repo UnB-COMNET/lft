@@ -14,6 +14,7 @@ Importing its modules does not create containers or start measurements.
 | `experiments/` | Runners, batch plans and shared execution helpers |
 | `experiments/rnp/` | RNP settings, baseline decisions, traffic sessions and callbacks |
 | `measurements/` | OVS, PCAP, iPerf, ping, hardware and service metrics; CSV processing |
+| `runtime/` | Procedures on a running topology: its state, link, host and switch changes, traffic, captures and timelines |
 | `assets/` | ONOS application archives, DASH certificates and Power BI dashboard |
 
 `demo/` and `dataset/` retain their experimental logic; their imports now use
