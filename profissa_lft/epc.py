@@ -27,7 +27,7 @@ class EPC(Perfsonar):
         self.userDb = None 
         self.buildDir = "/srsRAN/build"
 
-    def instantiate(self, dockerImage='alexandremitsurukaihara/lft:srsran', runCommand='') -> None:
+    def instantiate(self, dockerImage='alexandremitsurukaihara/lft:srsran-perfsonar-uhd4', runCommand='') -> None:
         super().instantiate(dockerImage=dockerImage, runCommand=runCommand)
         self.configEPC = self.readConfigFile(self.defaultEPCConfigPath)
         self.userDb = self.createUserDb()

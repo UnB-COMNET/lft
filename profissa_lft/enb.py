@@ -25,7 +25,7 @@ class EnB(Perfsonar):
         self.defaultMultiUEPath = self.buildDir + '/multiUE.py'
         self.defaultSingleUEPath = self.buildDir + '/singleUE.py'
 
-    def instantiate(self, dockerImage='alexandremitsurukaihara/lft:srsran', dockerCommand = '', dns='8.8.8.8', runCommand='') -> None:
+    def instantiate(self, dockerImage='alexandremitsurukaihara/lft:srsran-perfsonar-uhd4', dockerCommand = '', dns='8.8.8.8', runCommand='') -> None:
         super().instantiate(dockerImage=dockerImage, dockerCommand=dockerCommand, dns=dns, runCommand=runCommand)
         self.config = self.readConfigFile(self.defaultEnBConfigPath)
 
