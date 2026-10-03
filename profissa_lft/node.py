@@ -30,6 +30,12 @@ class Node:
 
 # Brief: This is a super class that define methods common for network nodes
 class Node:
+    # Kind of node, kept in the container's lft.kind label so switches, hosts and controllers can be
+    # told apart; every LFT container also carries lft=1, and cleanup removes only those
+    kind = "node"
+    # Role of the node in the topology, e.g. "server" or "client"; kept in the lft.role label when set
+    role = ""
+
     # Brief: Constructor of Node super class
     # Params:
     #   String containerName: Name of the container
@@ -58,11 +64,21 @@ class Node:
     #   None
     def instantiate(self, dockerImage="alexandremitsurukaihara/lst2.0:host", dockerCommand='', dns='8.8.8.8', memory='', cpus='', runCommand='') -> None:
         try:
-            self.containerAdapter.instantiate(dockerImage, dockerCommand, dns, memory, cpus, runCommand)
+            self.containerAdapter.instantiate(dockerImage, dockerCommand, dns, memory, cpus, runCommand, self.__labels())
             self.enableNamespace()
         except Exception as ex:
             logging.error(f"Error while criating the container {self.getNodeName()}: {str(ex)}")
             raise NodeInstantiationFailed(f"Error while criating the container {self.getNodeName()}: {str(ex)}")
+
+    # Brief: The labels that mark the container as an LFT node
+    # Params:
+    # Return:
+    #   Dict of the labels
+    def __labels(self) -> dict:
+        labels = {"lft": "1", "lft.kind": self.kind}
+        if self.role:
+            labels["lft.role"] = self.role
+        return labels
 
     # Brief: Instantiate the container
     # Params:

@@ -30,7 +30,7 @@ class ContainerPort(metaclass=ABCMeta):
         self.__nodeName = nodeName
 
     @abstractmethod
-    def instantiate(self, dockerImage: str, dockerCommand: str, dns: str, memory: str, cpus: str, runCommand: str) -> None:
+    def instantiate(self, dockerImage: str, dockerCommand: str, dns: str, memory: str, cpus: str, runCommand: str, labels: dict) -> None:
         pass
 
     @abstractmethod
