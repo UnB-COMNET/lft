@@ -43,20 +43,25 @@ def start_dash_clients_batch(client_batch: list[str], server_ips: list[str], sch
     return procs
 
 
-def main():
-    ROTATE_S = 300
+# Brief: Cumulative DASH load in four snapshots
+# Params:
+#   bool yes: Answer yes to the discovery question
+#   int duration: Seconds per snapshot (default 300)
+#   int clients: Clients in the last snapshot (default 100); the others take 25, 50 and 75% of it
+def main(yes: bool = False, duration: int = None, clients: int = None):
+    ROTATE_S = duration or 300
     HW_POLL_S = 5
     DISPLAY_FILTER = None
     BPF_FILTER = "(tcp port 80 or tcp port 443 or icmp)"
 
     # Cumulative load plan: 25, 50, 75, 100
-    BATCH_SIZES = [25, 50, 75, 100]
-    MAX_CLIENTS = 100
+    MAX_CLIENTS = clients or 100
+    BATCH_SIZES = [MAX_CLIENTS * k // 4 for k in (1, 2, 3, 4)]
 
     results_root = project_root / "results" / "dash"
     results_root.mkdir(parents=True, exist_ok=True)
 
-    run_discovery = (input("Controller host discovery? [y/N] ").strip().lower() == "y")
+    run_discovery = yes or (input("Controller host discovery? [y/N] ").strip().lower() == "y")
 
     run_root = results_root / f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
     run_root.mkdir(parents=True, exist_ok=True)
@@ -81,7 +86,7 @@ def main():
         "hw_poll_s": HW_POLL_S,
         "bpf_filter": BPF_FILTER,
         "display_filter": DISPLAY_FILTER,
-        "experiment": "4 snapshots, cumulative clients 25/50/75/100, random server among ALL servers",
+        "experiment": f"4 snapshots, cumulative clients {'/'.join(map(str, BATCH_SIZES))}, random server among ALL servers",
         "max_clients": MAX_CLIENTS,
     }
     (run_root / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")

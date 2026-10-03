@@ -13,7 +13,7 @@ if __package__ in (None, ""):
     __package__ = "onos_topologies.experiments.diamond"
 
 from onos_topologies.experiments.runtime import append_event, sleep_countdown
-from onos_topologies.infrastructure.containers import cleanup
+from onos_topologies.infrastructure.containers import cleanup, compose_cmd, compose_down, compose_up
 from onos_topologies.infrastructure.traffic_control import create_prio_netem
 from onos_topologies.measurements.csv_io import merge_all_snapshot_csvs
 from onos_topologies.measurements.iperf import snapshot_iperf_jsons_to_single_csv
@@ -78,12 +78,6 @@ def setup_prio_netem(sw: str, iface: str, delay_ms: int, jitter_ms: int = 0, bot
     create_prio_netem(sw, interfaces, tcp_ports=(5201,))
 
 
-DOCKER_RUN = "sudo docker run --rm -d --network host -v /var/run/docker.sock:/var/run/docker.sock --name"
-
-def start_container(name: str):
-    subprocess.run(f"{DOCKER_RUN} {name} {name}", shell=True)
-
-
 MODES = {
     '1': {"name": "cdn-qoe",  "onos": "2.5.0", "disable_fwd": True,  "apps": "proxyarp", "use_deployer": True},
     '2': {"name": "llm",      "onos": "2.5.0", "disable_fwd": True,  "apps": "proxyarp", "use_deployer": True, "pre_run": "ollama"},
@@ -95,7 +89,7 @@ MODES = {
 def main(
     algorithm: str = None,
     hindering: str = None,
-    auto_start: bool = False,
+    auto_start: bool = None,
     run_name: str = None,
 ):
     """
@@ -145,8 +139,9 @@ def main(
     mode_cfg = MODES[algorithm]
     service  = mode_cfg["name"]
 
-    auto_start_containers = auto_start
-    if not auto_start and mode_cfg.get("use_deployer", False):
+    # None asks; True starts deployer and supervisor; False: they are already running
+    auto_start_containers = bool(auto_start)
+    if auto_start is None and mode_cfg.get("use_deployer", False):
         launch_choice = ''
         while launch_choice not in {'1', '2'}:
             launch_choice = input(
@@ -216,18 +211,13 @@ def main(
         topo.servers[server_name].startServer(port=5201)
         time.sleep(2)
 
-        supervisor_image = "supervisor-quantization" if algorithm == '3' else "supervisor"
-
         if mode_cfg.get("use_deployer", False):
             if auto_start_containers:
                 print("\n" + log("SETUP", "Starting deployer and supervisor containers..."))
-                start_container("deployer")
-                subprocess.run(f"{DOCKER_RUN} supervisor {supervisor_image}", shell=True)
+                compose_up()
             else:
-                print("\n" + log("SETUP", "Start the deployer and supervisor manually in separate terminals:"))
-                indent = " " * len(log(""))
-                print(indent + "deployer:   sudo docker run --rm -it --network host -v /var/run/docker.sock:/var/run/docker.sock --name deployer deployer")
-                print(indent + f"supervisor: sudo docker run --rm -it --network host -v /var/run/docker.sock:/var/run/docker.sock --name supervisor {supervisor_image}")
+                print("\n" + log("SETUP", "Start the deployer and supervisor manually, with their logs attached:"))
+                print(" " * len(log("")) + compose_cmd("up"))
             sleep_countdown(t=60)
         else:
             print("\n" + log("SETUP", f"Skipping deployer and supervisor (mode '{service}' does not use them)."))
@@ -360,7 +350,7 @@ def main(
                 for raw_ip in topo.client_ip_range:
                     clean_ip = raw_ip.split('/')[0].strip()
                     deployer_service = "cdn-qoe" if service == "treshold" else service
-                    payload = {"intent": f"define intent q1: from endpoint('{clean_ip}') add service('{deployer_service}')"}
+                    payload = {"intent": f"define intent q1: for endpoint('{clean_ip}') add service('{deployer_service}')"}
                     print("\n" + log("SNAPSHOT 1", f"Sending intent for {clean_ip}..."))
                     try:
                         response = requests.post(base_url_deployer, json=payload, timeout=60)
@@ -465,8 +455,7 @@ def main(
         print(log("RESULTADOS", f"CSV de Ping gerado com {ping_stats['rows']} linhas."))
 
         if auto_start_containers:
-            for container in ("supervisor", "deployer"):
-                subprocess.run(f"sudo docker rm -f {container} 2>/dev/null || true", shell=True)
+            compose_down()
 
         try:
             cleanup()

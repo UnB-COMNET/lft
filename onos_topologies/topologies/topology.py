@@ -5,9 +5,10 @@ import time
 from pathlib import Path
 
 from onos_topologies.assets import ASSETS_DIR
-from onos_topologies.experiments.runtime import print_banner, sleep_countdown
+from onos_topologies.experiments.runtime import phase, print_banner, sleep_countdown
 from onos_topologies.infrastructure.containers import get_container_ip
 from onos_topologies.traffic.iperf import IperfClient, IperfServer
+from profissa_lft.host import Host
 
 from ..infrastructure.onos import ONOS
 from ..infrastructure.switch import Switch
@@ -90,8 +91,13 @@ class Topology:
                 dsname = f"ds{ds_index}"
                 ds_if, sw_if = f"{dsname}{self.pop_to_sname[pop]}", f"{self.pop_to_sname[pop]}{dsname}"
 
-                ds = IperfServer(dsname) if iperf else DashServer(dsname)
-                ds.instantiate(mapPorts=False)
+                # server_image (e.g. lft-dash-video) runs its own CMD instead of the iperf/dash defaults
+                if self.config.get("server_image"):
+                    ds = Host(dsname)
+                    ds.instantiate(dockerImage=self.config["server_image"])
+                else:
+                    ds = IperfServer(dsname) if iperf else DashServer(dsname)
+                    ds.instantiate(mapPorts=False)
                 ds.connect(edge_node, ds_if, sw_if)
 
                 server_ip = self.server_ip_range[ds_index]
@@ -138,8 +144,13 @@ class Topology:
                 cname = f"cl{cli_index}"
                 cl_if, sw_if = f"{cname}{self.pop_to_sname[pop]}", f"{self.pop_to_sname[pop]}{cname}"
 
-                cl = IperfClient(cname) if iperf else DashClient(cname)
-                cl.instantiate()
+                # client_image (e.g. lft-dash-client) runs its own CMD, like server_image for servers
+                if self.config.get("client_image"):
+                    cl = Host(cname)
+                    cl.instantiate(dockerImage=self.config["client_image"])
+                else:
+                    cl = IperfClient(cname) if iperf else DashClient(cname)
+                    cl.instantiate()
                 cl.connect(edge_node, cl_if, sw_if)
 
                 client_ip = self.client_ip_range[cli_index]
@@ -181,6 +192,7 @@ class Topology:
         print("Waiting for ONOS to initialize (30s) ...")
         sleep_countdown(30)
 
+        phase("apps", "Activating the ONOS apps and the link-quality .oar")
         print("[CTRL] Activating OpenFlow + Proxy Arp + Reactive Forwarding")
         apps_to_activate = ["org.onosproject.openflow", "org.onosproject.fwd", "org.onosproject.proxyarp"]
         for app in apps_to_activate:
@@ -392,11 +404,15 @@ class Topology:
     def run(self, run_discovery: bool = False, disable_fwd: bool = False, run_dash_clients: bool = False):
         print_banner()
         
+        phase("onos", f"Starting ONOS ({self.onos_version})")
         self.__create_controller()
         c1 = self.controller
 
+        phase("topology", f"Building {len(self.config['pops'])} switches and their links")
         self.__create_switches()
         self.__connect_switches()
+
+        phase("hosts", f"Creating {sum(p[1] + p[2] for p in self.config['pops'])} hosts")
 
         if (not self.iperf):
             # Default DASH
@@ -407,6 +423,7 @@ class Topology:
             self.__create_clients(iperf=True)
             self.__create_servers(iperf=True)
 
+        phase("discovery", "LLDP and ARP discovery")
         self.__discover_dash_servers()
 
         print("Waiting for network stabilization (5s)...\n")
@@ -426,6 +443,3 @@ class Topology:
             self.__run_dash_clients()
         else:
             print("[INFO] Dash Client script (GET /dash/download/<size>) skipped.")
-
-
-

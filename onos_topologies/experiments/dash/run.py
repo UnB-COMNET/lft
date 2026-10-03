@@ -26,8 +26,12 @@ from onos_topologies.topologies.configs.dash import DEBUG_CONFIG, DEFAULT_CONFIG
 from onos_topologies.topologies.topology import Topology
 
 
-def main():
-    ROTATE_S = 120 # 2 minutes per snapshot
+# Brief: Runs the DASH topology with continuous capture
+# Params:
+#   bool yes: Answer yes to every question (fwd off, discovery, capture, default topology)
+#   int duration: Seconds per snapshot (default 120)
+def main(yes: bool = False, duration: int = None):
+    ROTATE_S = duration or 120 # 2 minutes per snapshot
     HW_POLL_S = 5 
     DISPLAY_FILTER = None
     #BPF_FILTER = ""
@@ -36,10 +40,11 @@ def main():
     results_root = project_root / "results" / "dash"
     results_root.mkdir(parents=True, exist_ok=True)
 
-    disable_fwd = (input("Disable ONOS Active Forwarding? [y/N] ").strip().lower() == "y")
-    run_discovery = (input("Controller host discovery? [y/N] ").strip().lower() == "y")
-    run_capture = (input("Would you like to capture traffic and flow information from the network? [y/N] ").strip().lower() == "y")
-    run_default = (input("Would you like to run the default topology? (Debug, if NOT) [y/N] ").strip().lower() == "y")
+    ask = lambda question: yes or input(question).strip().lower() == "y"
+    disable_fwd = ask("Disable ONOS Active Forwarding? [y/N] ")
+    run_discovery = ask("Controller host discovery? [y/N] ")
+    run_capture = ask("Would you like to capture traffic and flow information from the network? [y/N] ")
+    run_default = ask("Would you like to run the default topology? (Debug, if NOT) [y/N] ")
 
     run_root = results_root / f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
     run_root.mkdir(parents=True, exist_ok=True)
