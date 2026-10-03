@@ -1,1 +1,3 @@
-includes dependencies.sh
+include dependencies.sh
+include onos_topologies/README.md
+recursive-include onos_topologies/assets *.oar *.pem *.pbix

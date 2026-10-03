@@ -15,21 +15,27 @@
 
 # This file is for defining a package in Python
 from setuptools import setup, find_packages
-from setuptools.command.install import install
-import subprocess
 
-class CustomInstall(install):
-    def run(self):
-        subprocess.run(f"chmod +X dependencies.sh", shell=True)
-        subprocess.run(f"sudo ./dependencies.sh", shell=True)
-        install.run(self)
-    
 setup(
     name='profissa_lft',
     version='1.0.10',
     packages=find_packages(),
     py_modules=['cli'],
-    install_requires=['pandas', 'paramiko', 'requests', 'rich'],
+    install_requires=[
+        'pandas==3.0.5',
+        # <4.0: o ONOS 2.5.0 embute um Karaf SSHD antigo (~2019) que só
+        # oferece "ssh-rsa" como host key. paramiko 5.0.0 removeu esse
+        # suporte de propósito, sem jeito suportado de reabilitar.
+        'paramiko==3.5.1',
+        'requests==2.34.2',
+        'rich==15.0.0',
+        'click==8.5.0',
+        # flask/networkx: sem validação de versão exata ainda (as pinadas
+        # acima foram testadas na VM de experimentos do grupo, ver
+        # infra/setup.sh do projeto PIBIC). Ajustar ao validar.
+        'flask>=3.0',
+        'networkx>=3.0',
+    ],
     entry_points={
         'console_scripts': [
             'lft=cli:main',
@@ -47,9 +53,8 @@ setup(
         'Operating System :: OS Independent',
     ],
     python_requires='>=3.9',
-    cmdclass= {
-        'install': CustomInstall
-    },
-    include_package_data=True
+    include_package_data=True,
+    package_data={'onos_topologies': ['README.md', 'assets/onos_apps/*.oar',
+                                     'assets/certs/*.pem', 'assets/dashboards/*.pbix']},
 )
 

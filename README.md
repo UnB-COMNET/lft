@@ -9,25 +9,62 @@
 ## Description
 LFT is a high-performance Python framework designed to orchestrate lightweight, containerized network emulation topologies with ease. Using Docker containers and Linux network namespaces, it allows researchers and engineers to construct arbitrary network topologies, emulate switches (Open vSwitch), SDN controllers (Ryu), cellular links (srsRAN 4G/LTE), and security attack scenarios with CICFlowMeter and perfSONAR integration.
 
+The `onos_topologies/` package additionally builds ONOS experiments for **Intent-Based Networking (IBN)** research: a **Deployer**
+receives, processes and applies **Nile intents** over the emulated topology,
+and an iperf3-based track compares routing modes under network stress
+(degradation or link failure):
+
+- **CDN-QoE**: optimal path/server selection from real-time RTT and throughput.
+- **LLM**: LLM-based decision-making via an external service.
+- **Threshold**: historical `treshold` mode with `supervisor-quantization`.
+- **Reactive Forwarding (fwd)**: standard SDN shortest-path routing.
+
+RNP additionally provides a weighted-Dijkstra baseline and distinct
+supervisor drift modes. Mode IDs differ between scenarios; see
+[`onos_topologies/README.md`](onos_topologies/README.md).
+
 ## 1. Requirements
 - **Operating System**: Ubuntu Desktop / Server 24.04 LTS (recommended) or macOS via OrbStack/Docker.
 - **Kernel**: Linux 5.15+ with network namespaces, `veth`, and Open vSwitch support.
 - **Python**: Python 3.9+ with `pip`.
 - **Docker**: Docker Engine 24.0+.
+- **Privileges**: root/sudo (the CLI and the containers it manages need it).
+- **tmux**: recommended for persistent runs over SSH.
 
 ## 2. Installation
-Install the project via `pip3`:
-```bash
-pip3 install profissa_lft
-```
 
-Or install from source:
+One script, one command, from a fresh clone to ready-to-run:
+
 ```bash
-git clone https://github.com/UnB-COMNET/lft.git
+git clone https://github.com/UnB-COMNET/lft
 cd lft
 chmod +x dependencies.sh
-./dependencies.sh
-pip3 install -e .
+sudo ./dependencies.sh
+```
+
+`dependencies.sh` does everything, in order, and is idempotent (safe to
+rerun after a partial/failed run). The full output also goes to
+`dependencies.log` (overwritten on every run):
+
+1. OS packages: Docker CE + Compose plugin, Open vSwitch, iproute2/iptables,
+   Python 3 + venv, firewalld (installed, not enabled), nfdump, git, tmux —
+   pinned versions, falls back to latest with a warning if a pin is gone.
+2. `.venv` + `pip install -e .` — installs this package with the versions
+   pinned in `setup.py`'s `install_requires`.
+3. Docker images the ONOS experiments need: pulls `onosproject/onos:2.5.0`,
+   builds `alexandremitsurukaihara/lst2.0:openvswitch` and `lft-iperf` from
+   `docker/`.
+
+CDN-QoE/LLM/Threshold modes also need externally supplied `deployer` and
+`supervisor` images — see [REIN's own setup](https://github.com/UnB-COMNET/REIN)
+in `sistemas/REIN` if you're working inside the PIBIC project, or your own
+build of those services otherwise. `dependencies.sh` does not build these;
+they come from a different repository.
+
+To use LFT only as a Python library, without the CLI and the ONOS experiments, it is also on PyPI:
+
+```bash
+pip3 install profissa_lft
 ```
 
 ## 3. Quick Start
@@ -37,14 +74,76 @@ cd examples
 python3 simpleSDNTopology.py
 ```
 
-## 4. Troubleshooting
-If you encounter any issues:
-1. Verify system dependencies: `./dependencies.sh`.
-2. Check if lingering containers are active: `docker ps -a` (run `docker rm -f $(docker ps -aq)` to clean up).
-3. Ensure required Docker images are available locally: `docker images`.
-4. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
+## 4. CLI
 
-## 5. Documentation
+After installing, use `sudo lft` to manage topologies interactively.
+
+**Load a topology and open the REPL:**
+```bash
+sudo lft topology create --preset diamond
+# or from a config file:
+sudo lft topology create --path onos_topologies/topologies/configs/diamond.py
+```
+
+**Start an empty topology manually:**
+```bash
+sudo lft topology create --manual
+```
+
+**REPL commands:**
+```
+create host <name> <ip>            add a host (iperf3 client)
+create server <name> <ip>          add a server (starts iperf3 -s)
+create switch <name>               add a switch
+connect <name1> <name2>            link two nodes
+traffic <ping|iperf> <n1> <n2> [iperf3 flags...]
+ls [hosts|switches]
+quit / help
+```
+
+**Other commands:**
+```bash
+sudo lft experiment                        # list available experiments
+sudo lft experiment <name>                 # run an experiment
+sudo lft utils clean                       # remove all Docker containers
+```
+
+## 5. ONOS experiments and results
+
+The maintained entry points and directory guide are documented in
+[onos_topologies/README.md](onos_topologies/README.md). Start with:
+
+```bash
+sudo lft experiment diamond --mode fwd --hindering degrade --run-name diamond-first
+sudo lft experiment rnp --mode baseline --seed 1 --run-name rnp-first
+```
+
+Diamond runs six 60-second measurement windows. RNP runs twelve 60-second
+windows with continuous traffic and seeded placement. Both degrade even-numbered
+windows; setup and orchestration add time outside the measurement windows.
+
+Results remain under `results/iperf/<run-name>/`. Diamond writes
+`iperf_flow_all.csv` and `ping_flow_all.csv`; RNP writes `iperf_all.csv` and
+`ping_all.csv`. Both retain OVS outputs. See
+[onos_topologies/README.md](onos_topologies/README.md) for modes, external
+services, batches and validation requirements.
+
+## 6. Troubleshooting
+
+If you face an issue running any LFT command:
+
+1. Check that `dependencies.sh` ran to completion (`sudo lft` should print
+   the banner, not an import error) — rerun it, it's idempotent.
+2. Check for leftover containers from a previous run: `docker ps -a`. Remove
+   them with `sudo lft utils clean` or `docker rm -f <name>`.
+3. Verify the images this experiment needs exist locally (`docker images`) —
+   see §2 and, for CDN-QoE/LLM/Threshold, the `deployer`/`supervisor`
+   images from REIN.
+4. ⚠️ Cleanup routines remove **all** Docker containers on the host. Use a
+   dedicated machine, not your daily driver.
+5. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
+
+## 7. Documentation
 Complete, in-depth documentation is available across multiple formats:
 
 - **Interactive GitHub Wiki**: **[UnB-COMNET/lft Wiki](https://github.com/UnB-COMNET/lft/wiki)** (with sidebar navigation, diagrams, and quick references).
