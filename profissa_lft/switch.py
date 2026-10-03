@@ -21,6 +21,8 @@ from .exceptions import NodeInstantiationFailed
 
 
 class Switch(Node): 
+    kind = "switch"
+
     # Brief: Instantiate a switch class, where it can be defined to capture flow data of each interface added
     # Params:
     # Return:

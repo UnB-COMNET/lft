@@ -30,6 +30,12 @@ class Node:
 
 # Brief: This is a super class that define methods common for network nodes
 class Node:
+    # Kind of node, kept in the container's lft.kind label so switches, hosts and controllers can be
+    # told apart; every LFT container also carries lft=1, and cleanup removes only those
+    kind = "node"
+    # Role of the node in the topology, e.g. "server" or "client"; kept in the lft.role label when set
+    role = ""
+
     # Brief: Constructor of Node super class
     # Params:
     #   String containerName: Name of the container
@@ -61,6 +67,7 @@ class Node:
 
         def addRunOptions():
             command.append("-d")
+            command.append(self.__labels())
 
         def addNetwork():
             command.append(NETWORK + "=none")
@@ -109,6 +116,7 @@ class Node:
     
         try:    
             if dockerCommand != '':
+                dockerCommand = dockerCommand.replace("docker run ", f"docker run {self.__labels()} ", 1)
                 subprocess.run(dockerCommand, shell=True, capture_output=True)            
             else:
                 subprocess.run(buildCommand(), shell=True, capture_output=True)
@@ -117,6 +125,14 @@ class Node:
             raise NodeInstantiationFailed(f"Error while criating the container {self.getNodeName()}: {str(ex)}")
         
         self.__enableNamespace(self.getNodeName())
+
+    # Brief: The docker run options that label the container as an LFT node
+    # Params:
+    # Return:
+    #   String with the --label options
+    def __labels(self) -> str:
+        role = f" --label lft.role={self.role}" if self.role else ""
+        return f"--label lft=1 --label lft.kind={self.kind}{role}"
 
     # Brief: Verifies if the image exists
     # Params:

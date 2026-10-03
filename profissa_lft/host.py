@@ -19,5 +19,5 @@ from .node import Node
 
 # Brief: This class is responsible for create, deleting and configuring a host
 class Host(Node):
-    pass
+    kind = "host"
 
