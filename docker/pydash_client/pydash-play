@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+# Brief: Runs pydash (/pydash, unchanged) against a testbed video server and prints each segment as
+# dash-play does, so lft traffic and the console read both alike:
+#   {"iteration", "resolution", "rate" (kbit/s of the quality), "elapsed" (s), "speed_kbps", "buffer" (s),
+#    "stalls"}
+# It writes pydash's dash_client.json: the server's manifest, the R2A, and a traffic shaping profile "L",
+# which caps each download at the top quality's bitrate only (pydash's default, "LMH", also forces the
+# lowest quality a third of the time), so the testbed network decides the rest. With that cap, the top
+# quality never fits R2AThroughput's margin: on a free path it plays the one below. pydash's own log and
+# plots stay in /pydash (results/).
+# The server is an lft-pydash-server: pydash takes the segment length from the manifest's "<n>sec" folder.
+# Usage: pydash-play <server ip> [seconds] [R2A]   (0 or nothing: until the video ends; R2A: R2AThroughput)
+import json
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+
+PYDASH = "/pydash"
+
+
+def main(server: str, seconds: float = 0, r2a: str = "R2AThroughput") -> None:
+    url = f"http://{server}/1sec/manifest.mpd"
+    with urllib.request.urlopen(url, timeout=30) as reply:
+        reps = re.findall(r"<Representation[^>]*>", reply.read().decode())
+    height = {int(re.search(r'bandwidth="(\d+)"', r)[1]): re.search(r'height="(\d+)"', r)[1] for r in reps}
+    qi = sorted(height)   # pydash's quality indexes
+    with open(f"{PYDASH}/dash_client.json") as f:
+        config = json.load(f)
+    with open(f"{PYDASH}/dash_client.json", "w") as f:
+        json.dump({**config, "url_mpd": url, "r2a_algorithm": r2a, "traffic_shaping_profile_sequence": "L"}, f, indent=4)
+
+    proc = subprocess.Popen([sys.executable, "-u", "main.py"], cwd=PYDASH, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True)
+    n = stalls = buffer = 0
+    quality, asked, playing, start = qi[0], time.time(), False, time.time()
+    try:
+        for line in proc.stdout:
+            if m := re.search(r"selected QI: (\d+)", line):
+                quality, asked = qi[int(m[1])], time.time()
+            elif m := re.search(r"buffer size: (\d+)", line):
+                stalls += playing and buffer > 0 and int(m[1]) == 0   # played its last second: a pause follows
+                buffer = int(m[1])
+            elif "buffering process is concluded" in line:
+                playing = True
+            elif m := re.search(r"measured throughput: ([\d.]+)", line):
+                n += 1
+                print(json.dumps({"iteration": n, "resolution": f"{height[quality]}p", "rate": quality // 1000,
+                                  "elapsed": round(time.time() - asked, 3), "speed_kbps": round(float(m[1]) / 1000),
+                                  "buffer": buffer, "stalls": stalls}), flush=True)
+            if seconds and time.time() - start >= seconds:
+                break
+    finally:
+        proc.terminate()
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 0, *sys.argv[3:4])
+    except KeyboardInterrupt:
+        pass

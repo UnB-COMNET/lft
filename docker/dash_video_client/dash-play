@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# Brief: Headless DASH player for the testbed's video servers (lft-dash-video, lft-pydash-server, lft-dash-live).
+# Reads http://<server>/manifest.mpd, then fetches one segment after another, picking the highest rendition
+# that fits 80% of the measured throughput, and keeps a 10 s buffer like a player does. The throughput is an
+# EWMA that a slower segment pulls down at once, so a degraded path lowers the quality on the next segment.
+# A static video loops; a live one (type="dynamic") is followed from its live edge, and a player that falls
+# out of the server's window jumps back to it. Prints one JSON line per segment:
+#   {"iteration", "resolution", "rate" (kbit/s of the rendition), "elapsed" (s), "speed_kbps", "buffer" (s),
+#    "stalls"}
+# Usage: dash-play <server ip> [seconds]   (0 or nothing: until interrupted)
+import json
+import math
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+BUFFER_S = 10
+NS = "{urn:mpeg:dash:schema:mpd:2011}"
+
+
+def fetch(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=30) as reply:
+        return reply.read()
+
+
+# Brief: "PT1M0.0S" -> 60.0
+def iso_seconds(text: str) -> float:
+    h, m, s = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?", text).groups()
+    return int(h or 0) * 3600 + int(m or 0) * 60 + float(s or 0)
+
+
+# Brief: The video renditions, lowest bitrate first: (bit/s, height, media template, first number, segment s).
+# A Representation's own SegmentTemplate wins over its AdaptationSet's.
+def renditions(mpd: ET.Element) -> list:
+    reps = []
+    for aset in mpd.iter(NS + "AdaptationSet"):
+        for rep in aset.iter(NS + "Representation"):
+            tpl = rep.find(NS + "SegmentTemplate")
+            tpl = tpl if tpl is not None else aset.find(NS + "SegmentTemplate")
+            height = rep.get("height") or aset.get("height") or aset.get("maxHeight") or "0"
+            media = re.sub(r"\$(RepresentationID|Bandwidth)\$", lambda m: rep.get("id" if m[1] == "RepresentationID" else "bandwidth"),
+                           tpl.get("media"))
+            reps.append((int(rep.get("bandwidth")), int(height), media, int(tpl.get("startNumber", 1)),
+                         int(tpl.get("duration")) / int(tpl.get("timescale", 1))))
+    return sorted(reps)
+
+
+# Brief: A media template with its $Number$ or $Number%05d$ filled in
+def segment(media: str, number: int) -> str:
+    return re.sub(r"\$Number(?:%0(\d+)d)?\$", lambda m: str(number).zfill(int(m[1] or 0)), media)
+
+
+def main(server: str, seconds: float = 0) -> None:
+    base = f"http://{server}/"
+    mpd = ET.fromstring(fetch(base + "manifest.mpd"))
+    reps = renditions(mpd)
+    first, seg_s = reps[0][3], reps[0][4]
+    live = mpd.get("type") == "dynamic"
+    if live:   # the segment before the newest complete one, so it is surely written
+        start_at = datetime.fromisoformat(mpd.get("availabilityStartTime").replace("Z", "+00:00")).timestamp()
+
+        def edge() -> int:
+            return first + max(int((time.time() - start_at) // seg_s) - 2, 0)
+        number = edge()
+    else:
+        number, count = first, math.ceil(iso_seconds(mpd.get("mediaPresentationDuration")) / seg_s)
+    estimate, buffer, stalls, n, start = None, 0.0, 0, 0, time.time()
+    while not seconds or time.time() - start < seconds:
+        fit = [r for r in reps if estimate and r[0] <= 0.8 * estimate] or reps[:1]
+        bw, height, media = fit[-1][:3]
+        t0 = time.time()
+        try:
+            data = fetch(base + segment(media, number if live else first + n % count))
+        except urllib.error.HTTPError as error:
+            if not (live and error.code == 404):
+                raise
+            if number < edge():   # gone from the server's window: back to the live edge
+                number = edge()
+                continue
+            time.sleep(seg_s / 4)   # past the live edge: not written yet, and the buffer plays meanwhile
+            buffer -= time.time() - t0
+            continue
+        elapsed = max(time.time() - t0, 1e-3)
+        speed = len(data) * 8 / elapsed
+        estimate = speed if estimate is None else min(speed, 0.7 * estimate + 0.3 * speed)
+        buffer -= elapsed
+        if buffer < 0 and n:
+            stalls += 1
+        buffer = max(buffer, 0) + seg_s
+        n, number = n + 1, number + 1
+        print(json.dumps({"iteration": n, "resolution": f"{height}p", "rate": bw // 1000, "elapsed": round(elapsed, 3),
+                          "speed_kbps": round(speed / 1000), "buffer": round(buffer, 1), "stalls": stalls}), flush=True)
+        if buffer > BUFFER_S:
+            time.sleep(buffer - BUFFER_S)
+            buffer = BUFFER_S
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 0)
+    except KeyboardInterrupt:
+        pass
