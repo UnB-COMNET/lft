@@ -32,16 +32,23 @@ supervisor drift modes. Mode IDs differ between scenarios; see
 - **tmux**: recommended for persistent runs over SSH.
 
 ## 2. Installation
-
-One script, one command, from a fresh clone to ready-to-run:
-
+Install the project via `pip3`:
 ```bash
-git clone https://github.com/UnB-COMNET/lft
-cd lft
-chmod +x dependencies.sh
-sudo ./dependencies.sh
+pip3 install profissa_lft
 ```
 
+Or install from source:
+```bash
+git clone https://github.com/UnB-COMNET/lft.git
+cd lft
+chmod +x dependencies.sh
+./dependencies.sh
+pip3 install -e .
+```
+
+### Setup for the CLI and the ONOS experiments
+
+For the `lft` CLI and the ONOS experiments, run the script as root (`sudo ./dependencies.sh`).
 `dependencies.sh` does everything, in order, and is idempotent (safe to
 rerun after a partial/failed run). The full output also goes to
 `dependencies.log` (overwritten on every run):
@@ -78,12 +85,6 @@ runs [pydash](https://github.com/mfcaetano/pydash) unchanged, with an `R2AThroug
 its `r2a/`; it plays `lft-pydash-server` only, since pydash takes the segment length from the
 manifest's `1sec/` folder.
 
-To use LFT only as a Python library, without the CLI and the ONOS experiments, it is also on PyPI:
-
-```bash
-pip3 install profissa_lft
-```
-
 ## 3. Quick Start
 Run a simple Software-Defined Network topology:
 ```bash
@@ -91,7 +92,36 @@ cd examples
 python3 simpleSDNTopology.py
 ```
 
-## 4. CLI
+## 4. Troubleshooting
+If you encounter any issues:
+1. Verify system dependencies: `./dependencies.sh`.
+2. Check if lingering containers are active: `docker ps -a` (run `docker rm -f $(docker ps -aq)` to clean up).
+3. Ensure required Docker images are available locally: `docker images`.
+4. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
+5. For the `lft` CLI, check that `dependencies.sh` ran to completion (`sudo lft` should print the banner, not an import error) and rerun it, it is idempotent.
+6. `sudo lft utils clean` removes only the containers LFT created (label `lft=1`).
+
+## 5. Documentation
+Complete, in-depth documentation is available across multiple formats:
+
+- **Interactive GitHub Wiki**: **[UnB-COMNET/lft Wiki](https://github.com/UnB-COMNET/lft/wiki)** (with sidebar navigation, diagrams, and quick references).
+- **Markdown Documentation**: Offline-browsable Markdown files in the [`docs/`](docs/) directory.
+- **Native DokuWiki Syntax**: Pre-formatted `.txt` files in [`dokuwiki/`](dokuwiki/) ready to import into local lab or university DokuWiki servers.
+
+### Documentation Index
+- **[Installation & Requirements](docs/Installation.md)**
+- **[LFT Core Architecture](docs/Architecture.md)**
+- **[Full API Reference](docs/API-Reference.md)**
+- **[SDN Topologies](docs/SDN-Topologies.md)**
+- **[Code Examples Walkthrough](docs/Code-Examples.md)** (covers all 8 scripts in `examples/`)
+- **[Experiments & Benchmarks](docs/Experiments-and-Benchmarks.md)** (deployment time, scalability, perfSONAR, wired and wireless benchmarks in `experiment/`)
+- **[Security Scenario: UNBCA / CIDDS](docs/Security-Scenario-UNBCA.md)** (enterprise topology, benign behaviors, attacks, and flow datasets in `scenario/`)
+- **[4G/LTE Cellular Emulation](docs/Wireless-4G-Emulation.md)** (srsRAN EPC, eNodeB, UEs, and ZMQ virtual radio)
+- **[Docker Image Catalog](docs/Docker-Images.md)** (specifications for all 11 Docker images)
+- **[Troubleshooting & Teardown](docs/Troubleshooting.md)**
+- **[Complete Master Manual (All-in-One)](docs/Master-Manual.md)** &bull; [`dokuwiki/LFT_MASTER_MANUAL.txt`](dokuwiki/LFT_MASTER_MANUAL.txt)
+
+## 6. CLI
 
 After installing, use `sudo lft` to manage topologies interactively.
 
@@ -148,9 +178,7 @@ sudo lft results ls [--run timeline/<run>]
 ```
 The timeline file format is described at the top of `onos_topologies/runtime/timeline.py`.
 
----
-
-## 5. ONOS experiments and results
+## 7. ONOS experiments and results
 
 The maintained entry points and directory guide are documented in
 [onos_topologies/README.md](onos_topologies/README.md). Start with:
@@ -169,38 +197,3 @@ Results remain under `results/iperf/<run-name>/`. Diamond writes
 `ping_all.csv`. Both retain OVS outputs. See
 [onos_topologies/README.md](onos_topologies/README.md) for modes, external
 services, batches and validation requirements.
-
-## 6. Troubleshooting
-
-If you face an issue running any LFT command:
-
-1. Check that `dependencies.sh` ran to completion (`sudo lft` should print
-   the banner, not an import error) — rerun it, it's idempotent.
-2. Check for leftover containers from a previous run: `docker ps -a`. Remove
-   them with `sudo lft utils clean` or `docker rm -f <name>`.
-3. Verify the images this experiment needs exist locally (`docker images`) —
-   see §2 and, for CDN-QoE/LLM/Threshold, the `deployer`/`supervisor`
-   images from REIN.
-4. ⚠️ Cleanup routines remove **all** Docker containers on the host. Use a
-   dedicated machine, not your daily driver.
-5. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
-
-## 7. Documentation
-Complete, in-depth documentation is available across multiple formats:
-
-- **Interactive GitHub Wiki**: **[UnB-COMNET/lft Wiki](https://github.com/UnB-COMNET/lft/wiki)** (with sidebar navigation, diagrams, and quick references).
-- **Markdown Documentation**: Offline-browsable Markdown files in the [`docs/`](docs/) directory.
-- **Native DokuWiki Syntax**: Pre-formatted `.txt` files in [`dokuwiki/`](dokuwiki/) ready to import into local lab or university DokuWiki servers.
-
-### Documentation Index
-- **[Installation & Requirements](docs/Installation.md)**
-- **[LFT Core Architecture](docs/Architecture.md)**
-- **[Full API Reference](docs/API-Reference.md)**
-- **[SDN Topologies](docs/SDN-Topologies.md)**
-- **[Code Examples Walkthrough](docs/Code-Examples.md)** (covers all 8 scripts in `examples/`)
-- **[Experiments & Benchmarks](docs/Experiments-and-Benchmarks.md)** (deployment time, scalability, perfSONAR, wired and wireless benchmarks in `experiment/`)
-- **[Security Scenario: UNBCA / CIDDS](docs/Security-Scenario-UNBCA.md)** (enterprise topology, benign behaviors, attacks, and flow datasets in `scenario/`)
-- **[4G/LTE Cellular Emulation](docs/Wireless-4G-Emulation.md)** (srsRAN EPC, eNodeB, UEs, and ZMQ virtual radio)
-- **[Docker Image Catalog](docs/Docker-Images.md)** (specifications for all 11 Docker images)
-- **[Troubleshooting & Teardown](docs/Troubleshooting.md)**
-- **[Complete Master Manual (All-in-One)](docs/Master-Manual.md)** &bull; [`dokuwiki/LFT_MASTER_MANUAL.txt`](dokuwiki/LFT_MASTER_MANUAL.txt)
