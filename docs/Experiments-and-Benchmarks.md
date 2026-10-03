@@ -1,0 +1,85 @@
+# Experiments and Benchmarks (experiment/)
+
+The `experiment/` package contains a comprehensive benchmarking and performance evaluation suite for LFT. It provides automated tools to measure deployment scalability, resource footprint, and network performance (throughput, RTT, latency) across wired and wireless setups.
+
+----
+
+## 1. Deployment & Scalability Benchmark (measure_deploy_time.py)
+
+This benchmark evaluates how rapidly LFT can instantiate network topologies compared to **Containernet / Mininet**, and measures memory consumption as the number of nodes scales from 1 to N.
+
+### Scripts Involved
+  * `experiment/measure_deploy_time.py`: Main benchmarking harness.
+  * `experiment/deploy_lft.py`: Class `DeployLFT` that instantiates a star topology with 1 OVS switch and `N` host containers (using `ubuntu:trusty`).
+  * `experiment/deploy_mininet.py`: Class `DeployMininet` that instantiates the equivalent topology using Containernet.
+
+### Methodology
+  1. **Deployment Time**: Measures the elapsed wall-clock time required to create containers, establish `veth` pairs, assign IP addresses, and bring interfaces up for varying node counts (e.g., 5, 10, 20, 50, 100 nodes).
+  2. **Memory Footprint**: A background thread polls host memory metrics (Resident Set Size - RSS and Virtual Memory Size - VSZ) until stabilization (5 seconds of inactivity) to determine the exact memory overhead per node.
+  3. **Results Export**: Outputs data to CSV files in `results/data/` and automatically plots comparative bar charts using Matplotlib (`barPlot()`).
+
+### Running the Benchmark
+```bash
+python3 -m experiment.measure_deploy_time
+```
+
+----
+
+## 2. perfSONAR and pScheduler Testbed Integration
+
+LFT integrates with **perfSONAR Testpoint** containers to automate standards-compliant network measurement:
+
+### Components
+  * `experiment/pschedulerWrapper.py`: A fluent Python wrapper around the `pscheduler` CLI. Supports:
+    * `MaxRuns(n)`: Limits the number of test runs.
+    * `Repeat(interval)`: Sets test repetition intervals (e.g., ISO 8601 `PT2M` for every 2 minutes).
+    * `Archiver()`: Directs test outputs to a central archiver JSON endpoint.
+    * `OutputFile(path, fileName)`: Saves raw test result JSONs to disk.
+  * `experiment/experiment.py`: Defines core measurement functions:
+    * `runThroughput(prefix, srcIp, dstIp)`: Invokes iperf3 throughput tests via pScheduler.
+    * `runRTT(prefix, srcIp, dstIp)`: Measures Round-Trip Time using ping and twping.
+    * `runLatency(prefix, srcIp, dstIp)`: Measures one-way latency using OWAMP.
+
+----
+
+## 3. Wired Benchmarking Suite (wired_experiment.py)
+
+Compares network performance across three distinct wired paradigms:
+
+| Paradigm | Source Script | Description |
+| --- | --- | --- |
+| **Emulated-to-Emulated (Emu-Emu)** | ''emu_emu_wired.py'' | Two perfSONAR containers (''h1'' and ''h2'') connected via direct ''veth'' pair with MTU 9000 jumbo frames. |
+| **Emulated-to-Physical (Emu-Phy)** | ''emu_phy_wired.py'' | An emulated perfSONAR container (''h1'') communicating with an external physical hardware server (IP ''38.68.234.53'') across the host network interface. |
+| **Physical-to-Physical (Phy-Phy)** | ''wired_experiment.py'' | Direct communication between two physical hardware machines as a baseline control reference. |
+
+### Running Wired Benchmarks
+```bash
+python3 -m experiment.wired_experiment
+```
+
+----
+
+## 4. Wireless 4G/LTE Benchmarking Suite (wireless_experiment.py)
+
+Evaluates 4G cellular latency and throughput across emulated and software-defined radio hardware setups:
+
+| Paradigm | Source Script | Description |
+| --- | --- | --- |
+| **Emulated-to-Emulated (Emu-Emu)** | ''emu_emu_wireless.py'' | EPC container and UE container communicating over simulated ZMQ radio channels via GNU Radio. |
+| **Emulated-to-Physical (Emu-Phy)** | ''emu_phy_wireless.py'' | UE container connected to a real **Ettus USRP X300** Software-Defined Radio (SDR) hardware device via UHD over 10 GbE. |
+| **Physical-to-Physical (Phy-Phy)** | ''wireless_experiment.py'' | Baseline measurement between commercial physical 4G hardware endpoints. |
+
+### Running Wireless Benchmarks
+```bash
+python3 -m experiment.wireless_experiment
+```
+
+----
+
+## 5. Summary of Benchmark Metrics
+
+All benchmark results are stored in `results/data/` and formatted as structured JSON:
+  * **Throughput**: Measured in Megabytes per second (MBps) and Megabits per second (Mbps).
+  * **Round-Trip Time (RTT)**: Minimum, mean, and maximum RTT in milliseconds (ms).
+  * **One-Way Latency**: Asymmetric delay measured via OWAMP synchronization in milliseconds (ms).
+  * **Deployment Efficiency**: Node instantiation rate (nodes per second) and memory consumption (MB per node).

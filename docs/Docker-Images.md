@@ -1,0 +1,46 @@
+# Docker Image Catalog
+
+All Docker images used by LFT are available on Docker Hub under the repository prefix `alexandremitsurukaihara/lft:*`.
+
+----
+
+## 1. Core Infrastructure Images
+
+| Image Tag | Base OS | Key Packages & Tools | Purpose |
+| --- | --- | --- | --- |
+| ''host'' | Ubuntu 22.04 | iproute2, iptables, net-tools, ping, iperf3, curl | Default container for general hosts and workstations. |
+| ''openvswitch'' | Ubuntu 22.04 | openvswitch-switch, openvswitch-common, tshark, tcpdump | Software switch running ''ovs-vswitchd'' and ''ovsdb-server''. |
+| ''ryucontroller'' | Ubuntu 20.04 | python3-ryu, eventlet, openflow-tools | Programmable SDN controller running Ryu manager. |
+
+----
+
+## 2. Performance & Security Measurement Images
+
+| Image Tag | Base OS | Key Packages & Tools | Purpose |
+| --- | --- | --- | --- |
+| ''cicflowmeter'' | Ubuntu 20.04 | openjdk-8-jre, jnetpcap, tcpdump, python3 | Flow extraction tool calculating 83 statistical network flow features. |
+| ''perfsonar-testpoint-ubuntu'' | Ubuntu 20.04 | perfsonar-testpoint, pscheduler, owamp, twping, iperf3 | Standards-compliant network benchmarking testpoint. |
+
+----
+
+## 3. Enterprise Server & Application Images
+
+| Image Tag | Base OS | Ports & Services | Role in Scenarios |
+| --- | --- | --- | --- |
+| ''web'' | Ubuntu 20.04 | TCP 80, 443 (Apache/Nginx, PHP) | Corporate web application and target for HTTP DoS and web scans. |
+| ''mail'' | Ubuntu 20.04 | TCP 25 (SMTP), 143 (IMAP) (Postfix/Dovecot) | Enterprise email server for benign mailing and brute force attacks. |
+| ''file'' | Ubuntu 20.04 | TCP 445, 139 (Samba / NFS) | Internal network share for corporate document synchronization. |
+| ''backup'' | Ubuntu 20.04 | TCP 22 (SSH), rsync | Storage server for automated nightly enterprise backups. |
+| ''printer'' | Ubuntu 20.04 | TCP 9100, 631 (CUPS Raw / IPP) | Networked office printer emulating spool job processing. |
+| ''seafile'' | Ubuntu 20.04 | TCP 8000, 8082 (Seafile Core) | Private enterprise cloud storage service. |
+| ''linuxclient'' | Ubuntu 20.04 | Python 3, Selenium, requests, Paramiko | Client workstation equipped with employee behavior automation engines. |
+
+----
+
+## Building Images Locally
+
+All Dockerfiles are maintained in the `docker/` directory of the repository. To rebuild any image:
+```bash
+cd docker/<imageName>
+docker build -t alexandremitsurukaihara/lft:<imageName> .
+```

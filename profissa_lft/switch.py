@@ -44,6 +44,12 @@ class Switch(Node):
         mount = ''
         if self.__mount: mount = f'-v {self.__hostPath}:{self.__containerPath}'
         super().instantiate(dockerCommand=f"docker run -d --network=none --privileged {mount} --name={self.getNodeName()} {image}")
+        import time
+        for _ in range(30):
+            res = subprocess.run(f"docker exec {self.getNodeName()} ovs-vsctl show", shell=True, capture_output=True)
+            if res.returncode == 0:
+                break
+            time.sleep(0.5)
         try:
             # Create bridge and set it up
             subprocess.run(f"docker exec {self.getNodeName()} ovs-vsctl add-br {self.getNodeName()}", shell=True)
@@ -146,7 +152,7 @@ class Switch(Node):
         try:
             interfaces = interfaceNames
             if len(interfaceNames) == 0:
-                interfaces = self.__getAllInterfaces()
+                interfaces = self._Node__getAllInterfaces()
             interfaces = list(set(interfaces) - set(['lo', 'ovs-system']))
             options = ['-i ' + interface for interface in interfaces]
             options = ' '.join(options)

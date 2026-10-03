@@ -1,0 +1,94 @@
+====== LFT Core Architecture ======
+
+LFT is designed to combine the resource efficiency of container virtualization with the fidelity of hardware network emulation. This section explains the fundamental operating principles of LFT.
+
+----
+
+===== 1. Isolation via Linux Network Namespaces =====
+
+Each node in LFT (whether a host, switch, or controller) is encapsulated within an isolated Linux network namespace (''netns'').
+
+When a node is instantiated via ''Node.instantiate()'':
+  1. A Docker container is launched with ''docker run -d --privileged --net=none''. The container possesses its own process tree, filesystem, and PID.
+  2. LFT retrieves the container's PID via ''docker inspect --format '{{.State.Pid}}' <containerName>''.
+  3. LFT creates a symbolic link in the host's filesystem pointing to the container's network namespace:
+     <code bash>
+     mkdir -p /var/run/netns
+     ln -s /proc/$PID/ns/net /var/run/netns/<containerName>
+     </code>
+  4. Once registered in ''/var/run/netns'', standard Linux ''ip netns'' commands can program network interfaces, routing tables, and firewall rules directly inside the container without invoking ''docker exec''.
+
+----
+
+===== 2. Interconnection via Virtual Ethernet (veth) Pairs =====
+
+Containers in LFT do not rely on standard Docker bridge networks. Instead, arbitrary network topologies are constructed using virtual Ethernet (''veth'') pairs:
+
+<code text>
++---------------------------+                 +---------------------------+
+| Container: h1             |                 | Container: s1 (Switch)    |
+| Network Namespace: h1     |                 | Network Namespace: s1     |
+|                           |                 |                           |
+|  [ Interface: h1s1 ]      |                 |  [ Interface: s1h1 ]      |
+|    IP: 10.0.0.1/24        |                 |    (Port on OVS Bridge)   |
++-------------|-------------+                 +-------------|-------------+
+              |                                             |
+              +=================== veth ====================+
+                              (Virtual Wire)
+</code>
+
+When executing ''nodeA.connect(nodeB, "ifaceA", "ifaceB")'':
+  1. The host kernel executes ''ip link add ifaceA type veth peer name ifaceB''.
+  2. ''ifaceA'' is moved into the namespace of ''nodeA'': ''ip link set ifaceA netns <pidA>''.
+  3. ''ifaceB'' is moved into the namespace of ''nodeB'': ''ip link set ifaceB netns <pidB>''.
+  4. Both interfaces are brought up: ''ip link set dev <iface> up''.
+
+> [!IMPORTANT]
+> **Kernel Interface Name Limit**: The Linux kernel macro ''IFNAMSIZ'' enforces a maximum interface name length of **15 characters** (plus null terminator). Using names longer than 15 characters causes ''Numerical result out of range'' errors. Always use concise names (e.g., ''h1_s1'', ''s1_h1'').
+
+----
+
+===== 3. Switching with Open vSwitch (OVS) =====
+
+The ''Switch'' class runs Open vSwitch (''ovs-vswitchd'' and ''ovsdb-server'') inside an isolated container. 
+  * When instantiated, an OpenFlow bridge is initialized: ''ovs-vsctl add-br <switchName>''.
+  * Interfaces connected to the switch are bound directly to the bridge: ''ovs-vsctl add-port <switchName> <iface>''.
+  * The switch connects to an external or emulated SDN controller using OpenFlow 1.3:
+    <code bash>
+    ovs-vsctl set-controller <switchName> tcp:<controllerIp>:<controllerPort>
+    </code>
+
+----
+
+===== 4. Host Gateway, Routing, and NAT Masquerading =====
+
+To provide Internet access to emulated topologies without interfering with the host's primary network:
+  1. A ''veth'' pair connects the switch (or router) to the host root namespace:
+     ''s1.connectToInternet(gatewayIp, mask, ifaceSwitch, ifaceHost)''.
+  2. The host side is assigned a gateway IP (e.g., ''10.0.0.5/24'').
+  3. LFT enables kernel IP forwarding on the host (''sysctl -w net.ipv4.ip_forward=1'').
+  4. An ''iptables'' NAT rule is configured to masquerade outgoing packets:
+     <code bash>
+     iptables -t nat -A POSTROUTING -s <subnet>/<maskLength> -j MASQUERADE
+     </code>
+
+----
+
+===== 5. Link Emulation via Traffic Control (tc netem) =====
+
+LFT supports realistic emulation of physical and wireless links (delay, jitter, packet loss, bandwidth limitations) by configuring the Linux kernel's Network Emulation (''netem'') queuing discipline inside the container namespace:
+
+<code python>
+node.setInterfaceProperties(
+    interfaceName="h1s1",
+    throughput="10mbit",
+    delay="50ms",
+    jitter="5ms",
+    loss="0.1%"
+)
+</code>
+This executes:
+<code bash>
+tc qdisc add dev h1s1 root handle 1: netem delay 50ms 5ms loss 0.1%
+tc qdisc add dev h1s1 parent 1: handle 2: tbf rate 10mbit burst 32kbit latency 400ms
+</code>

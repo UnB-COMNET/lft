@@ -1,14 +1,15 @@
+<p align="center"><img src="logos/lft-github.png" width="450" alt="LFT Logo"></p>
+
 # Lightweight Fog Testbed (LFT)
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Python: 3.9+](https://img.shields.io/badge/python-3.9+-brightgreen.svg)](https://www.python.org/)
+[![Wiki](https://img.shields.io/badge/docs-GitHub%20Wiki-orange.svg)](https://github.com/UnB-COMNET/lft/wiki)
+
 ## Description
+LFT is a high-performance Python framework designed to orchestrate lightweight, containerized network emulation topologies with ease. Using Docker containers and Linux network namespaces, it allows researchers and engineers to construct arbitrary network topologies, emulate switches (Open vSwitch), SDN controllers (Ryu), cellular links (srsRAN 4G/LTE), and security attack scenarios with CICFlowMeter and perfSONAR integration.
 
-**LFT** emulates network topologies with Docker containers: each node
-(switch, host, controller) is a container, linked to the others with `veth`
-pairs. Links get capacity, delay and jitter via `tc netem`. Switches are
-**Open vSwitch**, controlled by an **ONOS** instance.
-
-This branch (`chore/reorganize-onos-topologies`) additionally builds ONOS
-experiments for **Intent-Based Networking (IBN)** research: a **Deployer**
+The `onos_topologies/` package additionally builds ONOS experiments for **Intent-Based Networking (IBN)** research: a **Deployer**
 receives, processes and applies **Nile intents** over the emulated topology,
 and an iperf3-based track compares routing modes under network stress
 (degradation or link failure):
@@ -22,13 +23,13 @@ RNP additionally provides a weighted-Dijkstra baseline and distinct
 supervisor drift modes. Mode IDs differ between scenarios; see
 [`onos_topologies/README.md`](onos_topologies/README.md).
 
----
-
 ## 1. Requirements
-
-- Linux with Docker support (validated on Ubuntu Server 25.04)
-- Root/sudo (the CLI and the containers it manages need it)
-- `tmux` recommended for persistent runs over SSH
+- **Operating System**: Ubuntu Desktop / Server 24.04 LTS (recommended) or macOS via OrbStack/Docker.
+- **Kernel**: Linux 5.15+ with network namespaces, `veth`, and Open vSwitch support.
+- **Python**: Python 3.9+ with `pip`.
+- **Docker**: Docker Engine 24.0+.
+- **Privileges**: root/sudo (the CLI and the containers it manages need it).
+- **tmux**: recommended for persistent runs over SSH.
 
 ## 2. Installation
 
@@ -60,7 +61,20 @@ in `sistemas/REIN` if you're working inside the PIBIC project, or your own
 build of those services otherwise. `dependencies.sh` does not build these;
 they come from a different repository.
 
-## 3. CLI
+To use LFT only as a Python library, without the CLI and the ONOS experiments, it is also on PyPI:
+
+```bash
+pip3 install profissa_lft
+```
+
+## 3. Quick Start
+Run a simple Software-Defined Network topology:
+```bash
+cd examples
+python3 simpleSDNTopology.py
+```
+
+## 4. CLI
 
 After installing, use `sudo lft` to manage topologies interactively.
 
@@ -94,9 +108,7 @@ sudo lft experiment <name>                 # run an experiment
 sudo lft utils clean                       # remove all Docker containers
 ```
 
----
-
-## 4. ONOS experiments and results
+## 5. ONOS experiments and results
 
 The maintained entry points and directory guide are documented in
 [onos_topologies/README.md](onos_topologies/README.md). Start with:
@@ -116,7 +128,7 @@ Results remain under `results/iperf/<run-name>/`. Diamond writes
 [onos_topologies/README.md](onos_topologies/README.md) for modes, external
 services, batches and validation requirements.
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 If you face an issue running any LFT command:
 
@@ -129,3 +141,24 @@ If you face an issue running any LFT command:
    images from REIN.
 4. ⚠️ Cleanup routines remove **all** Docker containers on the host. Use a
    dedicated machine, not your daily driver.
+5. Consult the [Troubleshooting Guide](https://github.com/UnB-COMNET/lft/wiki/Troubleshooting) or [`docs/Troubleshooting.md`](docs/Troubleshooting.md).
+
+## 7. Documentation
+Complete, in-depth documentation is available across multiple formats:
+
+- **Interactive GitHub Wiki**: **[UnB-COMNET/lft Wiki](https://github.com/UnB-COMNET/lft/wiki)** (with sidebar navigation, diagrams, and quick references).
+- **Markdown Documentation**: Offline-browsable Markdown files in the [`docs/`](docs/) directory.
+- **Native DokuWiki Syntax**: Pre-formatted `.txt` files in [`dokuwiki/`](dokuwiki/) ready to import into local lab or university DokuWiki servers.
+
+### Documentation Index
+- **[Installation & Requirements](docs/Installation.md)**
+- **[LFT Core Architecture](docs/Architecture.md)**
+- **[Full API Reference](docs/API-Reference.md)**
+- **[SDN Topologies](docs/SDN-Topologies.md)**
+- **[Code Examples Walkthrough](docs/Code-Examples.md)** (covers all 8 scripts in `examples/`)
+- **[Experiments & Benchmarks](docs/Experiments-and-Benchmarks.md)** (deployment time, scalability, perfSONAR, wired and wireless benchmarks in `experiment/`)
+- **[Security Scenario: UNBCA / CIDDS](docs/Security-Scenario-UNBCA.md)** (enterprise topology, benign behaviors, attacks, and flow datasets in `scenario/`)
+- **[4G/LTE Cellular Emulation](docs/Wireless-4G-Emulation.md)** (srsRAN EPC, eNodeB, UEs, and ZMQ virtual radio)
+- **[Docker Image Catalog](docs/Docker-Images.md)** (specifications for all 11 Docker images)
+- **[Troubleshooting & Teardown](docs/Troubleshooting.md)**
+- **[Complete Master Manual (All-in-One)](docs/Master-Manual.md)** &bull; [`dokuwiki/LFT_MASTER_MANUAL.txt`](dokuwiki/LFT_MASTER_MANUAL.txt)
